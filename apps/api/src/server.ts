@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import cors from "@fastify/cors";
-import type { WebSocket } from "ws";
+import type { RawData } from "ws";
 import type {
   CommandMessage,
   TelemetryMessage,
@@ -30,8 +30,8 @@ await fastify.register(cors, {
 await fastify.register(websocket);
 
 // Connection state
-let esp32Socket: WebSocket | null = null;
-const webClients = new Set<WebSocket>();
+let esp32Socket: any = null;
+const webClients = new Set<any>();
 
 // In-memory telemetry buffer
 const telemetryBuffer: TelemetryMessage[] = [];
@@ -56,8 +56,8 @@ function broadcastToWeb(message: ServerMessage) {
 // WebSocket routes
 fastify.register(async (fastify) => {
   // ESP32 connects here
-  fastify.get("/ws/robot", { websocket: true }, (connection) => {
-    const { socket } = connection;
+  fastify.get("/ws/robot", { websocket: true }, (connection: any) => {
+    const socket = connection.socket;
 
     fastify.log.info("🤖 ESP32 connected");
     esp32Socket = socket;
@@ -68,7 +68,7 @@ fastify.register(async (fastify) => {
       message: "Robot connected",
     });
 
-    socket.on("message", (raw) => {
+    socket.on("message", (raw: RawData) => {
       try {
         const message = JSON.parse(raw.toString()) as TelemetryMessage;
 
@@ -77,8 +77,8 @@ fastify.register(async (fastify) => {
         }
 
         broadcastToWeb(message);
-      } catch (err) {
-        fastify.log.error("Failed to parse ESP32 message:", err);
+      } catch (err: unknown) {
+        fastify.log.error({ err }, "Failed to parse ESP32 message");
       }
     });
 
@@ -93,14 +93,14 @@ fastify.register(async (fastify) => {
       });
     });
 
-    socket.on("error", (err) => {
-      fastify.log.error("ESP32 socket error:", err);
+    socket.on("error", (err: Error) => {
+      fastify.log.error({ err }, "ESP32 socket error");
     });
   });
 
   // Web UI clients connect here
-  fastify.get("/ws/client", { websocket: true }, (connection) => {
-    const { socket } = connection;
+  fastify.get("/ws/client", { websocket: true }, (connection: any) => {
+    const socket = connection.socket;
 
     fastify.log.info("💻 Web client connected");
     webClients.add(socket);
@@ -113,7 +113,7 @@ fastify.register(async (fastify) => {
       })
     );
 
-    socket.on("message", (raw) => {
+    socket.on("message", (raw: RawData) => {
       try {
         const command = JSON.parse(raw.toString()) as CommandMessage;
 
@@ -132,8 +132,8 @@ fastify.register(async (fastify) => {
             })
           );
         }
-      } catch (err) {
-        fastify.log.error("Failed to process command:", err);
+      } catch (err: unknown) {
+        fastify.log.error({ err }, "Failed to process command");
         socket.send(
           JSON.stringify({
             type: "error",

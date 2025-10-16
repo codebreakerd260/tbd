@@ -7,7 +7,7 @@ export function useWebSocket(url: string) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<ServerMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
