@@ -1,0 +1,20 @@
+{
+  "name": "robot-control",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "preinstall": "pnpm --filter @robot-control/types build",
+    "dev": "turbo run dev",
+    "dev:api": "pnpm --filter @robot-control/api dev",
+    "dev:web": "pnpm --filter @robot-control/web dev",
+    "build": "turbo run build"
+  },
+  "devDependencies": {
+    "turbo": "^1.13.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
