@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import type {
-  TelemetryMessage,
-  RobotConfig,
+import {
+  type TelemetryMessage,
+  type RobotConfig,
   DEFAULT_CONFIG,
 } from "@robot-control/types";
 
