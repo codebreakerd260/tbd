@@ -11,8 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Activity, Wifi, WifiOff, Zap } from "lucide-react";
 
-const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001/ws/client";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL!;
 
 export default function Dashboard() {
   const { isConnected, lastMessage, send } = useWebSocket(WS_URL);

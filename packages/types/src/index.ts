@@ -54,6 +54,7 @@ export interface StatusMessage {
 export interface ErrorMessage {
   type: "error";
   message: string;
+  command?: CommandMessage;
 }
 
 export type ServerMessage = TelemetryMessage | StatusMessage | ErrorMessage;
