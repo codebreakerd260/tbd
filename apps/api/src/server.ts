@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import cors from "@fastify/cors";
-import type { WebSocket } from "ws";
+import type { WebSocket, RawData } from "ws";
 import type {
   CommandMessage,
   TelemetryMessage,
@@ -56,100 +56,104 @@ function broadcastToWeb(message: ServerMessage) {
 // WebSocket routes
 fastify.register(async (fastify) => {
   // ESP32 connects here
-  fastify.get("/ws/robot", { websocket: true }, (connection) => {
-    const { socket } = connection;
-
-    fastify.log.info("🤖 ESP32 connected");
-    esp32Socket = socket;
-
-    broadcastToWeb({
-      type: "status",
-      connected: true,
-      message: "Robot connected",
-    });
-
-    socket.on("message", (raw) => {
-      try {
-        const message = JSON.parse(raw.toString()) as TelemetryMessage;
-
-        if (message.type === "telemetry") {
-          logTelemetry(message);
-        }
-
-        broadcastToWeb(message);
-      } catch (err) {
-        fastify.log.error("Failed to parse ESP32 message:", err);
-      }
-    });
-
-    socket.on("close", () => {
-      fastify.log.warn("🔴 ESP32 disconnected");
-      esp32Socket = null;
+  fastify.get(
+    "/ws/robot",
+    { websocket: true },
+    (socket, req) => {
+      fastify.log.info("🤖 ESP32 connected");
+      esp32Socket = socket;
 
       broadcastToWeb({
         type: "status",
-        connected: false,
-        message: "Robot disconnected",
+        connected: true,
+        message: "Robot connected",
       });
-    });
 
-    socket.on("error", (err) => {
-      fastify.log.error("ESP32 socket error:", err);
-    });
-  });
+      socket.on("message", (raw: RawData) => {
+        try {
+          const message = JSON.parse(raw.toString()) as TelemetryMessage;
+
+          if (message.type === "telemetry") {
+            logTelemetry(message);
+          }
+
+          broadcastToWeb(message);
+        } catch (err) {
+          fastify.log.error(err, "Failed to parse ESP32 message");
+        }
+      });
+
+      socket.on("close", () => {
+        fastify.log.warn("🔴 ESP32 disconnected");
+        esp32Socket = null;
+
+        broadcastToWeb({
+          type: "status",
+          connected: false,
+          message: "Robot disconnected",
+        });
+      });
+
+      socket.on("error", (err: Error) => {
+        fastify.log.error(err, "ESP32 socket error");
+      });
+    }
+  );
 
   // Web UI clients connect here
-  fastify.get("/ws/client", { websocket: true }, (connection) => {
-    const { socket } = connection;
+  fastify.get(
+    "/ws/client",
+    { websocket: true },
+    (socket, req) => {
+      fastify.log.info("💻 Web client connected");
+      webClients.add(socket);
 
-    fastify.log.info("💻 Web client connected");
-    webClients.add(socket);
+      socket.send(
+        JSON.stringify({
+          type: "status",
+          connected: esp32Socket?.readyState === 1,
+          message: esp32Socket ? "Robot online" : "Robot offline",
+        })
+      );
 
-    socket.send(
-      JSON.stringify({
-        type: "status",
-        connected: esp32Socket?.readyState === 1,
-        message: esp32Socket ? "Robot online" : "Robot offline",
-      })
-    );
+      socket.on("message", (raw: RawData) => {
+        try {
+          const command = JSON.parse(raw.toString()) as CommandMessage;
 
-    socket.on("message", (raw) => {
-      try {
-        const command = JSON.parse(raw.toString()) as CommandMessage;
+          if (!command.type) {
+            throw new Error("Missing command type");
+          }
 
-        if (!command.type) {
-          throw new Error("Missing command type");
-        }
-
-        if (esp32Socket && esp32Socket.readyState === 1) {
-          esp32Socket.send(JSON.stringify(command));
-          fastify.log.debug(`Command sent: ${command.type}`);
-        } else {
+          if (esp32Socket && esp32Socket.readyState === 1) {
+            esp32Socket.send(JSON.stringify(command));
+            fastify.log.debug(`Command sent: ${command.type}`);
+          } else {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                message: "Robot offline - command not sent",
+              })
+            );
+          }
+        } catch (err) {
+          fastify.log.error(err, "Failed to process command");
           socket.send(
             JSON.stringify({
               type: "error",
-              message: "Robot offline - command not sent",
+              message: err instanceof Error ? err.message : "Invalid command",
             })
           );
         }
-      } catch (err) {
-        fastify.log.error("Failed to process command:", err);
-        socket.send(
-          JSON.stringify({
-            type: "error",
-            message: err instanceof Error ? err.message : "Invalid command",
-          })
-        );
-      }
-    });
+      });
 
-    socket.on("close", () => {
-      webClients.delete(socket);
-      fastify.log.info(
-        `💻 Web client disconnected (${webClients.size} remaining)`
-      );
-    });
-  });
+      socket.on("close", () => {
+        webClients.delete(socket);
+        fastify.log.info(
+          `💻 Web client disconnected (${webClients.size} remaining)`
+        );
+      });
+    }
+  );
 });
 
 // REST API endpoints
